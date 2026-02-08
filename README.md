@@ -6,7 +6,12 @@
 [![MacOS](https://github.com/TheMariday/MariMapper/actions/workflows/test_mac.yml/badge.svg)](https://github.com/TheMariday/MariMapper/actions/workflows/test_mac.yml)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-
+> [!WARNING]  
+> Marimapper is currently undergoing major breaking changes
+> 
+> v4.0.0 is targetted for release in November 2026
+>
+> See more info [here](https://github.com/TheMariday/marimapper/discussions/86)
 
 ### Marimapper can use your webcam to map addressable LEDs to 3D space!
 
