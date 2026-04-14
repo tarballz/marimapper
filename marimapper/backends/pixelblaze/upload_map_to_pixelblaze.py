@@ -15,6 +15,12 @@ def read_coordinates_from_csv(csv_file_name, swap_yz=False):
         for row in csv_reader:
             list_of_leds.append(row)
 
+        if not list_of_leds:
+            raise RuntimeError(
+                f"No LED data found in {csv_file_name}. "
+                "Has 3D reconstruction succeeded? Check that led_map_3d.csv is non-empty."
+            )
+
         # Find the largest LED index value (not list position)
         max_led_index = int(max(list_of_leds, key=lambda r: int(r["index"]))["index"])
 
@@ -41,7 +47,9 @@ def read_coordinates_from_csv(csv_file_name, swap_yz=False):
 def upload_map_to_pixelblaze(cli_args):
     swap_yz = getattr(cli_args, "swap_yz", False)
     final_coordinate_list = read_coordinates_from_csv(cli_args.csv_file, swap_yz=swap_yz)
-    logger.info(final_coordinate_list)
+    logger.info(
+        f"Loaded {len(final_coordinate_list)} LED coordinates from {cli_args.csv_file}"
+    )
 
     upload_coordinates = utils.get_user_confirmation(
         "Upload coordinates to Pixelblaze? [y/n]: "

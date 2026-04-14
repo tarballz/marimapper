@@ -21,6 +21,17 @@ def pixelblaze_backend_factory(argparse_args: argparse.Namespace):
 
 def pixelblaze_backend_set_args(parser):
     parser.add_argument("--server", default="192.168.4.1")
+    parser.add_argument(
+        "--swap-yz",
+        dest="swap_yz",
+        action="store_true",
+        default=False,
+        help=(
+            "Swap the Y and Z axes when uploading the map. "
+            "Use this if your Pixelblaze patterns treat Z as the vertical axis "
+            "(marimapper outputs Y-up coordinates by default)"
+        ),
+    )
 
 
 class Backend:

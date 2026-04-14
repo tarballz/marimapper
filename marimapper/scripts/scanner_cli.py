@@ -74,7 +74,6 @@ def main():
         csv_file = Path(args.dir) / "led_map_3d.csv"
         if csv_file.exists():
             args.csv_file = csv_file
-            args.swap_yz = False
             upload_map_to_pixelblaze(args)
         else:
             print(

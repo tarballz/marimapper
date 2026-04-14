@@ -5,6 +5,7 @@ from marimapper.led import (
     LED3D,
     fill_gaps,
     get_overlap_and_percentage,
+    get_view_ids,
     LED2D,
     last_view,
     combine_2d_3d,
