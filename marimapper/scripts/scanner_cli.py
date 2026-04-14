@@ -7,6 +7,7 @@ warnings.simplefilter(
 import multiprocessing
 import argparse
 import logging
+from pathlib import Path
 from marimapper.scripts.arg_tools import (
     parse_common_args,
     add_common_args,
@@ -59,10 +60,26 @@ def main():
         args.interpolation_max_error if args.interpolation_max_error != -1 else 10000,
         args.disable_movement_check,
         args.camera_model,
+        args.camera_fov,
     )
 
     scanner.mainloop()
     scanner.close()
+
+    if args.backend == "pixelblaze":
+        from marimapper.backends.pixelblaze.upload_map_to_pixelblaze import (
+            upload_map_to_pixelblaze,
+        )
+
+        csv_file = Path(args.dir) / "led_map_3d.csv"
+        if csv_file.exists():
+            args.csv_file = csv_file
+            args.swap_yz = False
+            upload_map_to_pixelblaze(args)
+        else:
+            print(
+                "No 3D map found to upload (led_map_3d.csv not found in scan directory)"
+            )
 
 
 if __name__ == "__main__":

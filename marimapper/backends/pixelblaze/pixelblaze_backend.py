@@ -20,7 +20,7 @@ def pixelblaze_backend_factory(argparse_args: argparse.Namespace):
 
 
 def pixelblaze_backend_set_args(parser):
-    parser.add_argument("--server", default="4.3.2.1")
+    parser.add_argument("--server", default="192.168.4.1")
 
 
 class Backend:
@@ -39,14 +39,11 @@ class Backend:
             self.pb.setActivePatternByName(
                 "marimapper"
             )  # Need to install marimapper.js to your pixelblaze
-        except TypeError as e:
-            if "'NoneType' has no len()" in str(e):
-                raise RuntimeError(
-                    "Pixelblaze may have failed to find the effect 'marimapper'. "
-                    "Have you uploaded marimapper.epe to your controller?"
-                )
-            else:
-                raise e
+        except (TypeError, AttributeError):
+            raise RuntimeError(
+                "Pixelblaze may have failed to find the effect 'marimapper'. "
+                "Have you uploaded marimapper.epe to your controller?"
+            )
 
     def get_led_count(self):
         pixel_count = self.pb.getPixelCount()

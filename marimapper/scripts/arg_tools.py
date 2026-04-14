@@ -34,6 +34,18 @@ def add_camera_args(parser):
         default=128,
     )
 
+    camera_options.add_argument(
+        "--camera_fov",
+        type=int,
+        default=60,
+        help=(
+            "Horizontal field of view of your webcam in degrees. "
+            "Check your camera's spec sheet for the correct value — an incorrect FOV "
+            "will distort 3D reconstruction depth. "
+            "Known values: Logitech C920=73°, Logitech Brio 101=65° (diagonal, check spec sheet)"
+        ),
+    )
+
 
 def add_common_args(parser) -> None:
 

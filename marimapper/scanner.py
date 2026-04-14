@@ -60,6 +60,7 @@ class Scanner:
         interpolation_max_error: float,
         check_movement: bool,
         camera_model_name: str,
+        camera_fov: int = 60,
     ):
         logger.debug("initialising scanner")
         set_start_method("spawn")  # VERY important, see top of file
@@ -86,7 +87,7 @@ class Scanner:
             existing_leds,
             led_count,
             camera_model_name=camera_model_name,
-            camera_fov=60,
+            camera_fov=camera_fov,
         )
 
         self.current_view = last_view(existing_leds) + 1

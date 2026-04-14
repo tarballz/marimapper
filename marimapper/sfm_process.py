@@ -142,6 +142,15 @@ class SFM(Process):
                 )
                 end_sfm_time = time.time()
 
+                if len(self.leds_3d) == 0 and len(get_view_ids(self.leds_2d)) >= 2:
+                    print_without_hiding_scan_message(
+                        "Warning: 3D reconstruction failed.\n"
+                        "Possible causes:\n"
+                        "  - Not enough LEDs visible in multiple views (need at least 9 shared)\n"
+                        "  - Camera may have moved between scans\n"
+                        "  - Try adding more views from different angles"
+                    )
+
                 if len(self.leds_3d) > 0:
                     rescale(self.leds_3d)
 
