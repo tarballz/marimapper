@@ -294,9 +294,21 @@ def merge(leds: list[LED3D]) -> LED3D:
 
     new_led.views = [view for led in leds for view in led.views]
 
-    new_led.point.position = np.average([led.point.position for led in leds], axis=0)
-    new_led.point.normal = np.average([led.point.normal for led in leds], axis=0)
-    new_led.point.error = sum([led.point.error for led in leds])
+    # Weight by inverse reprojection error so higher-confidence reconstructions
+    # contribute more to the merged position
+    errors = [led.point.error for led in leds]
+    if all(e > 0 for e in errors):
+        weights = [1.0 / e for e in errors]
+    else:
+        weights = None
+
+    new_led.point.position = np.average(
+        [led.point.position for led in leds], axis=0, weights=weights
+    )
+    new_led.point.normal = np.average(
+        [led.point.normal for led in leds], axis=0, weights=weights
+    )
+    new_led.point.error = sum(errors)
     new_led.merged = True
     return new_led
 

@@ -115,7 +115,7 @@ Set up your LEDs so most of them are in view and when you're ready, type `y` whe
 
 This will turn each LED on and off in turn, **do not move the camera or leds during capture!**
 
-If you just want a 2D map, this is where you can stop!
+If you just want a 2D map, this is where you can stop! See [2D map mode](#2d-map-mode-flat-installations) below for how to turn a single scan view into a PixelBlaze-ready CSV without running the full 3D reconstruction.
 
 Rotate your leds or move your webcam to a new position
 
@@ -148,6 +148,49 @@ By default (`1`), the colors of the leds in the visualiser are as follows:
 
 - Green: Reconstructed
 - Blue: Interpolated
+
+## 2D map mode (flat installations)
+
+If your LEDs are laid out on a flat surface (a panel, sign, or wall) and you're viewing them head-on, you don't need multi-view 3D reconstruction — the camera image itself is already your map. `marimapper_export_2d_map` turns a single 2D scan view directly into a PixelBlaze-compatible CSV with `z=0`, skipping COLMAP/SFM entirely.
+
+### When to use it
+
+- Your install is genuinely 2D (flat).
+- You have a single head-on camera shot covering all the LEDs.
+- The full pipeline is failing, too slow, or introducing noise for your flat layout.
+
+### How to use it
+
+1. Run a normal scan to capture **one view**:
+
+   ```
+   marimapper <backend>
+   ```
+
+   Accept the scan. You can stop after the first view — you only need the `led_map_2d_*.csv` it writes.
+
+2. Convert the 2D detections to a PixelBlaze-style map:
+
+   ```
+   marimapper_export_2d_map led_map_2d_0.csv --output led_map_3d.csv
+   ```
+
+   - Positional argument: the `led_map_2d_*.csv` from the view you want to use.
+   - `--output`: destination file, defaults to `led_map_3d.csv`.
+
+   The script writes `index,x,y,z` rows with `x=u`, `y=v`, `z=0`. Missing LED indices are filled with `(0,0,0)` so indexing stays aligned. A summary prints total / mapped / missing counts.
+
+3. Upload the resulting `led_map_3d.csv` the same way you would a 3D map:
+
+   ```
+   marimapper_upload_mapping_to_pixelblaze led_map_3d.csv
+   ```
+
+### Notes
+
+- Coordinates are raw pixel `(u, v)` values — PixelBlaze normalizes these on upload.
+- No normals are produced; effects that rely on surface normals won't work.
+- If your view isn't perfectly head-on, the resulting map will inherit perspective distortion.
 
 # Not working?
 

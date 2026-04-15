@@ -38,7 +38,10 @@ def find_led_in_image(image: np.ndarray, threshold: int = 128) -> Optional[Point
         contours, key=lambda c: contour_brightness(image, c), reverse=True
     )[0]
 
-    moments = cv2.moments(brightest_contour)
+    # Use intensity-weighted moments on the masked region for sub-pixel accuracy
+    mask = np.zeros(image.shape, dtype=np.uint8)
+    cv2.drawContours(mask, [brightest_contour], -1, 255, -1)
+    moments = cv2.moments(image * (mask // 255))
 
     center_u = moments["m10"] / max(moments["m00"], 0.00001)
     center_v = moments["m01"] / max(moments["m00"], 0.00001)

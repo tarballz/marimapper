@@ -6,6 +6,7 @@ from marimapper.led import (
     get_next,
     LED2D,
     last_view,
+    merge,
     Point2D,
     Colors,
 )
@@ -83,6 +84,41 @@ def test_get_next():
     assert get_next(led_1, leds) == led_2
     assert get_next(led_5, leds) is None
     assert get_next(led_2, leds) == led_3
+
+
+def test_merge_weights_by_inverse_error():
+    # High-confidence LED (low error) at x=0, low-confidence (high error) at x=10.
+    # Weights are 1/error, so the merged position should sit near the low-error LED.
+    good = LED3D(0)
+    good.point.set_position(0.0, 0.0, 0.0)
+    good.point.error = 1.0
+
+    bad = LED3D(0)
+    bad.point.set_position(10.0, 0.0, 0.0)
+    bad.point.error = 9.0
+
+    merged = merge([good, bad])
+
+    # Weighted average: (1*0 + (1/9)*10) / (1 + 1/9) = 1.0
+    assert abs(merged.point.position[0] - 1.0) < 1e-9
+    # Error is still summed (preserves existing downstream semantics)
+    assert merged.point.error == 10.0
+
+
+def test_merge_falls_back_to_uniform_when_error_is_zero():
+    # If any contributing LED has zero error, weighting is skipped to avoid
+    # divide-by-zero and we fall back to a uniform average.
+    a = LED3D(0)
+    a.point.set_position(0.0, 0.0, 0.0)
+    a.point.error = 0.0
+
+    b = LED3D(0)
+    b.point.set_position(4.0, 0.0, 0.0)
+    b.point.error = 2.0
+
+    merged = merge([a, b])
+
+    assert merged.point.position[0] == 2.0
 
 
 def test_last_view():
