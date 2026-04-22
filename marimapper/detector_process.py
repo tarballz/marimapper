@@ -56,6 +56,7 @@ def detect_leds(
     threshold: int,
     display: bool,
     output_queues: list[Queue2D],
+    adaptive: bool = False,
 ):
     leds = []
     for led_id in range(led_id_from, led_id_to):
@@ -67,6 +68,7 @@ def detect_leds(
             timeout_controller,
             threshold,
             display,
+            adaptive=adaptive,
         )
 
         for queue in output_queues:
@@ -88,6 +90,7 @@ class DetectorProcess(Process):
         backend_factory: partial,
         display: bool = True,
         check_movement=True,
+        adaptive: bool = False,
     ):
         super().__init__()
         self._request_detections_queue = RequestDetectionsQueue()  # {led_id, view_id}
@@ -103,6 +106,7 @@ class DetectorProcess(Process):
         self._led_backend_factory = backend_factory
         self._display = display
         self._check_movement = check_movement
+        self._adaptive = adaptive
 
     def get_input_3d_info_queue(self):
         return self._input_3d_info_queue
@@ -175,6 +179,7 @@ class DetectorProcess(Process):
                     self._threshold,
                     self._display,
                     self._output_queues,
+                    adaptive=self._adaptive,
                 )
 
                 if leds is not None and len(leds) > 0:
@@ -191,6 +196,7 @@ class DetectorProcess(Process):
                             timeout_controller,
                             self._threshold,
                             self._display,
+                            adaptive=self._adaptive,
                         )
                         if led_current is not None:
                             distance = get_distance(led_current, led_first)

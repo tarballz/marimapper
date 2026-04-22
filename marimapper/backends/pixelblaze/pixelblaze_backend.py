@@ -45,6 +45,7 @@ class Backend:
                 f"Pixelblaze backend failed to start due as {pixelblaze_ip} is not a valid IP address"
             )
 
+        self.ip = pixelblaze_ip
         self.pb = pixelblaze.Pixelblaze(pixelblaze_ip)
         try:
             self.pb.setActivePatternByName(
@@ -64,11 +65,45 @@ class Backend:
     def set_led(self, led_index: int, on: bool):
         self.pb.setActiveVariables({"pixel_to_light": led_index, "turn_on": on})
 
-    def set_map_coordinates(self, pixelmap: list):
-        result = self.pb.setMapCoordinates(pixelmap)
-        if result is False:
-            raise RuntimeError("Pixelblaze Backend failed to upload map coordinates.")
-        self.pb.wsSendJson({"mapperFit": 0})
+    def set_map_coordinates(self, pixelmap):
+        # Coerce to plain list-of-list-of-float. pixelblaze-client serializes the
+        # payload via str(list) into a JS literal; tuples/numpy scalars produce
+        # invalid JS and silently break uploads.
+        coerced = [[float(c[0]), float(c[1]), float(c[2])] for c in pixelmap]
+
+        last_exc = None
+        for attempt in range(2):
+            try:
+                result = self.pb.setMapCoordinates(coerced)
+                if result is False:
+                    raise RuntimeError(
+                        f"Pixelblaze at {self.ip} rejected map of {len(coerced)} LEDs"
+                    )
+                self.pb.wsSendJson({"mapperFit": 0})
+                break
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(f"Pixelblaze upload attempt {attempt + 1} failed: {exc}")
+        else:
+            raise RuntimeError(
+                f"Failed to upload {len(coerced)} LED coordinates to Pixelblaze "
+                f"at {self.ip} after 2 attempts: {last_exc}"
+            )
+
+        # Post-upload verification: best-effort count check.
+        try:
+            readback = self.pb.getMapCoordinates()
+            if readback is not None and len(readback) != len(coerced):
+                logger.warning(
+                    f"Pixelblaze read-back reports {len(readback)} coordinates, "
+                    f"expected {len(coerced)}"
+                )
+            else:
+                logger.info(
+                    f"Verified: Pixelblaze now has {len(coerced)} 3D coordinates"
+                )
+        except Exception as exc:
+            logger.warning(f"Pixelblaze read-back verification skipped: {exc}")
 
     def set_current_map(self, pixelmap_name: str):
         self.pb.setActivePatternByName(pixelmap_name)

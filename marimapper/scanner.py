@@ -61,6 +61,8 @@ class Scanner:
         check_movement: bool,
         camera_model_name: str,
         camera_fov: int = 60,
+        outlier_prune_k: float = 6.0,
+        adaptive_threshold: bool = False,
     ):
         logger.debug("initialising scanner")
         set_start_method("spawn")  # VERY important, see top of file
@@ -73,6 +75,7 @@ class Scanner:
             backend_factory=backend_factory,
             display=True,
             check_movement=check_movement,
+            adaptive=adaptive_threshold,
         )
 
         self.file_writer = FileWriterProcess(self.output_dir)
@@ -88,6 +91,7 @@ class Scanner:
             led_count,
             camera_model_name=camera_model_name,
             camera_fov=camera_fov,
+            outlier_prune_k=outlier_prune_k,
         )
 
         self.current_view = last_view(existing_leds) + 1

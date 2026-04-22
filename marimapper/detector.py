@@ -10,22 +10,35 @@ from marimapper.camera import Camera
 from marimapper.timeout_controller import TimeoutController
 from marimapper.led import Point2D, LED2D
 
-
 logger = get_logger()
 
 
-def contour_brightness(image: np.ndarray, contour: np.ndarray) -> int:
+def contour_brightness(image: np.ndarray, contour: np.ndarray) -> float:
     """Calculate the sum of all pixels within a contour."""
     mask = np.zeros(image.shape, dtype=np.uint8)
     cv2.drawContours(mask, [contour], -1, 255, -1)
     masked_image = cv2.bitwise_and(image, image, mask=mask)
-    return cv2.sumElems(masked_image)
+    return float(cv2.sumElems(masked_image)[0])
 
 
-def find_led_in_image(image: np.ndarray, threshold: int = 128) -> Optional[Point2D]:
+def find_led_in_image(
+    image: np.ndarray,
+    threshold: int = 128,
+    dark_frame: Optional[np.ndarray] = None,
+    ambiguity_ratio: float = 0.7,
+) -> Optional[Point2D]:
 
     if len(image.shape) > 2:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Adaptive path: subtract a reference "all LEDs off" frame before
+    # thresholding, so ambient light and fixed-pattern noise cancel out.
+    # The threshold is then applied to the delta signal rather than the
+    # raw frame.
+    if dark_frame is not None:
+        if len(dark_frame.shape) > 2:
+            dark_frame = cv2.cvtColor(dark_frame, cv2.COLOR_BGR2GRAY)
+        image = cv2.subtract(image, dark_frame)
 
     _, image_thresh = cv2.threshold(image, threshold, 255, cv2.THRESH_TOZERO)
 
@@ -34,9 +47,20 @@ def find_led_in_image(image: np.ndarray, threshold: int = 128) -> Optional[Point
     if len(contours) == 0:
         return None
 
-    brightest_contour = sorted(
-        contours, key=lambda c: contour_brightness(image, c), reverse=True
-    )[0]
+    scored = sorted(
+        ((contour_brightness(image, c), c) for c in contours),
+        key=lambda s: s[0],
+        reverse=True,
+    )
+    # Reject when the second-brightest blob is too close in score to the
+    # brightest — typically a specular reflection that we can't reliably
+    # disambiguate. The outer capture loop will retry (and the next frame
+    # may have different noise / camera jitter that resolves the tie).
+    if ambiguity_ratio > 0 and len(scored) >= 2 and scored[0][0] > 0:
+        if scored[1][0] / scored[0][0] >= ambiguity_ratio:
+            return None
+
+    brightest_contour = scored[0][1]
 
     # Use intensity-weighted moments on the masked region for sub-pixel accuracy
     mask = np.zeros(image.shape, dtype=np.uint8)
@@ -124,11 +148,14 @@ def set_cam_dark(cam: Camera, exposure: int) -> bool:
 
 
 def find_led(
-    cam: Camera, threshold: int = 128, display: bool = True
+    cam: Camera,
+    threshold: int = 128,
+    display: bool = True,
+    dark_frame: Optional[np.ndarray] = None,
 ) -> Optional[Point2D]:
 
     image = cam.read()
-    results = find_led_in_image(image, threshold)
+    results = find_led_in_image(image, threshold, dark_frame=dark_frame)
 
     if display:
         rendered_image = draw_led_detections(image, results)
@@ -145,18 +172,28 @@ def enable_and_find_led(
     timeout_controller: TimeoutController,
     threshold: int,
     display: bool = False,
+    adaptive: bool = False,
 ) -> Optional[LED2D]:
 
     darkness_timeout_seconds = 3.0
 
-    # First wait for no leds to be visible, this should always be false
+    # First wait for no leds to be visible, this should always be false.
+    # When adaptive=True, also sample a dark reference frame from this phase
+    # so the subsequent bright capture can be dark-subtracted.
+    dark_frame: Optional[np.ndarray] = None
     start = time.time()
-    while find_led(cam, threshold, display) is not None:
+    while find_led(cam, threshold, display, dark_frame=dark_frame) is not None:
         if time.time() - start > darkness_timeout_seconds:
             logging.warning(
                 f"Detector can't start detecting led {led_id} as an led is already visible"
             )
             return None
+
+    if adaptive:
+        frame = cam.read()
+        if len(frame.shape) > 2:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        dark_frame = frame
 
     # Set the led to on and start the clock
     response_time_start = time.time()
@@ -168,7 +205,7 @@ def enable_and_find_led(
     while (
         point is None and time.time() < response_time_start + timeout_controller.timeout
     ):
-        point = find_led(cam, threshold, display)
+        point = find_led(cam, threshold, display, dark_frame=dark_frame)
 
     led_backend.set_led(led_id, False)
 
@@ -178,7 +215,7 @@ def enable_and_find_led(
     timeout_controller.add_response_time(time.time() - response_time_start)
 
     start = time.time()
-    while find_led(cam, threshold, display) is not None:
+    while find_led(cam, threshold, display, dark_frame=dark_frame) is not None:
         if time.time() - start > darkness_timeout_seconds:
             logging.warning(
                 f"Detector can't stop detecting led {led_id} as an led is already visible, retrying backend..."

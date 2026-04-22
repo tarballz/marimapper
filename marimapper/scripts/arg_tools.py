@@ -35,6 +35,20 @@ def add_camera_args(parser):
     )
 
     camera_options.add_argument(
+        "--adaptive_threshold",
+        action="store_true",
+        help=(
+            "Use dark-frame differencing for LED detection: before each LED "
+            "scan, capture a reference frame with no LEDs on and subtract it "
+            "from the bright capture before thresholding. Reduces sensitivity "
+            "to ambient light and fixed-pattern camera noise; still respects "
+            "--threshold but the threshold now applies to the delta signal "
+            "so you can use a lower value. Slightly increases per-LED scan "
+            "time."
+        ),
+    )
+
+    camera_options.add_argument(
         "--camera_fov",
         type=int,
         default=60,
@@ -93,6 +107,37 @@ def add_scanner_args(parser) -> None:
         type=float,
         default=0.2,
         help="The maximum variance in led spacing whilst interpolating LEDs, set to -1 for no limit",
+    )
+
+    scanner_options.add_argument(
+        "--outlier_prune_k",
+        type=float,
+        default=6.0,
+        help=(
+            "Drop colmap-reconstructed LEDs whose reprojection error exceeds "
+            "median + k * MAD before post-processing. The default (6) catches "
+            "only egregious outliers (~6σ); tighten to 3.0 if your scan has "
+            "many obvious outliers, or raise to a large value (e.g. 1000) to "
+            "effectively disable pruning."
+        ),
+    )
+
+    scanner_options.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "If existing view CSVs are found in --dir, continue scanning from "
+            "the next view without prompting."
+        ),
+    )
+
+    scanner_options.add_argument(
+        "--fresh",
+        action="store_true",
+        help=(
+            "If existing view CSVs are found in --dir, move them into a "
+            "timestamped archive subdirectory before scanning."
+        ),
     )
 
     scanner_options.add_argument(

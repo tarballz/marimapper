@@ -7,7 +7,7 @@ as a new pattern.
 
 Once this is done, run `marimapper_check_backend pixelblaze` to test it. It should cause LED 0 to blink.
 
-By default, marimapper tools will use the address `4.3.2.1`, but this can be changed by using the `--server` argument.
+By default, marimapper tools will use the address `192.168.4.1`, but this can be changed by using the `--server` argument.
 
 Once you've checked your PixelBlaze setup is talking nicely with marimapper, you can go ahead and start mapping!
 

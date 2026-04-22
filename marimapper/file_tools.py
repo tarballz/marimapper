@@ -1,4 +1,6 @@
 import os
+import shutil
+from datetime import datetime
 from marimapper.led import Point2D, LED3D, LED2D
 import typing
 from pathlib import Path
@@ -52,6 +54,46 @@ def get_all_2d_led_maps(directory: Path) -> list[LED2D]:
             points.extend(detections)
 
     return points
+
+
+def find_view_csvs(directory: Path) -> list[Path]:
+    """Return the paths of CSVs in ``directory`` that match the 2D-view schema
+    (header line ``index,u,v``). Used to detect existing scans for resume."""
+    directory = Path(directory)
+    if not directory.is_dir():
+        return []
+
+    views = []
+    for entry in sorted(os.listdir(directory)):
+        path = directory / entry
+        if not path.is_file() or path.suffix != ".csv":
+            continue
+        try:
+            with open(path, "r") as f:
+                header = f.readline().strip()
+        except OSError:
+            continue
+        if header == "index,u,v":
+            views.append(path)
+    return views
+
+
+def archive_existing_scans(directory: Path) -> typing.Optional[Path]:
+    """Move all view CSVs in ``directory`` into a timestamped subdirectory
+    (non-destructive "start fresh"). Returns the archive path, or None if
+    there was nothing to archive. Non-view files (e.g. ``led_map_3d.csv``)
+    are left in place."""
+    views = find_view_csvs(directory)
+    if not views:
+        return None
+
+    directory = Path(directory)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    archive = directory / f"archived_{stamp}"
+    archive.mkdir()
+    for view in views:
+        shutil.move(str(view), str(archive / view.name))
+    return archive
 
 
 def write_2d_leds_to_file(leds: list[LED2D], filename: Path):

@@ -47,6 +47,27 @@ camera_models = [
     camera_model_opencv_full,
 ]
 
+
+def build_intrinsics(fov_in_degrees: int, scale: int = ARBITRARY_SCALE):
+    """Pinhole intrinsics matching the camera used during SfM.
+
+    Returned K, cx, cy, and scale must stay in sync with the keypoints built
+    in ``populate_database`` below, otherwise any external triangulation will
+    land in a different frame than the colmap-solved poses.
+    """
+    width = height = scale
+    cx = width / 2.0
+    cy = height / 2.0
+    f = (width / 2.0) / tan(radians(fov_in_degrees / 2.0))
+    K = np.array([[f, 0.0, cx], [0.0, f, cy], [0.0, 0.0, 1.0]])
+    return K
+
+
+def led2d_to_pixel(u: float, v: float, scale: int = ARBITRARY_SCALE):
+    """Apply the same (1-u, 1-v) * scale flip ``populate_database`` uses."""
+    return (1.0 - u) * scale, (1.0 - v) * scale
+
+
 camera_model_type = Union[
     camera_model_pinhole,
     camera_model_radial,
