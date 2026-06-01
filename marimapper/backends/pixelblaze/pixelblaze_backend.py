@@ -47,15 +47,22 @@ class Backend:
 
         self.ip = pixelblaze_ip
         self.pb = pixelblaze.Pixelblaze(pixelblaze_ip)
+        self._marimapper_pattern_active = False
+
+    def _ensure_marimapper_pattern(self):
+        # Only the scanning path (set_led) needs the marimapper pattern loaded;
+        # uploading a finished map does not. Activate lazily so a missing
+        # pattern doesn't block uploads.
+        if self._marimapper_pattern_active:
+            return
         try:
-            self.pb.setActivePatternByName(
-                "marimapper"
-            )  # Need to install marimapper.js to your pixelblaze
+            self.pb.setActivePatternByName("marimapper")
         except (TypeError, AttributeError):
             raise RuntimeError(
                 "Pixelblaze may have failed to find the effect 'marimapper'. "
                 "Have you uploaded marimapper.epe to your controller?"
             )
+        self._marimapper_pattern_active = True
 
     def get_led_count(self):
         pixel_count = self.pb.getPixelCount()
@@ -63,6 +70,7 @@ class Backend:
         return pixel_count
 
     def set_led(self, led_index: int, on: bool):
+        self._ensure_marimapper_pattern()
         self.pb.setActiveVariables({"pixel_to_light": led_index, "turn_on": on})
 
     def set_map_coordinates(self, pixelmap):

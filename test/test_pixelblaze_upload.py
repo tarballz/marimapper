@@ -274,6 +274,61 @@ def test_pixel_count_mismatch_warns_and_prompts(tmp_path, monkeypatch, fake_pb, 
     assert len(prompts) == 2
 
 
+def test_upload_works_without_marimapper_pattern(tmp_path, monkeypatch, fake_pb):
+    """Upload path must not require the 'marimapper' pattern to exist on device.
+
+    Scanning needs the pattern (it drives per-LED flashing), but uploading a map
+    only calls getPixelCount + setMapCoordinates. A user who never installed the
+    scanning pattern, or who deleted it after scanning, should still be able to
+    push a finished map.
+    """
+
+    class NoPatternPixelblaze(FakePixelblaze):
+        def setActivePatternByName(self, name):
+            # pixelblaze-client raises TypeError when the named pattern is absent
+            raise TypeError("pattern 'marimapper' not found")
+
+    from marimapper.backends.pixelblaze import pixelblaze_backend
+
+    instances = []
+
+    def factory(ip):
+        inst = NoPatternPixelblaze(ip)
+        instances.append(inst)
+        return inst
+
+    monkeypatch.setattr(pixelblaze_backend.pixelblaze, "Pixelblaze", factory)
+
+    csv_file = tmp_path / "led_map_3d.csv"
+    write_csv(csv_file, [make_row(i, x=i, y=i, z=i) for i in range(5)])
+    _auto_confirm(monkeypatch)
+
+    upload_map_to_pixelblaze(Args(csv_file=csv_file, server="1.2.3.4", swap_yz=False))
+
+    assert len(instances) == 1
+    assert len(instances[0].set_map_calls) == 1
+
+
+def test_set_led_still_requires_marimapper_pattern(monkeypatch, fake_pb):
+    """Scanning path must surface a clear error when the pattern is missing."""
+
+    class NoPatternPixelblaze(FakePixelblaze):
+        def setActivePatternByName(self, name):
+            raise TypeError("pattern 'marimapper' not found")
+
+    from marimapper.backends.pixelblaze import pixelblaze_backend
+
+    monkeypatch.setattr(
+        pixelblaze_backend.pixelblaze,
+        "Pixelblaze",
+        lambda ip: NoPatternPixelblaze(ip),
+    )
+
+    backend = pixelblaze_backend.Backend("1.2.3.4")  # construction must succeed
+    with pytest.raises(RuntimeError, match="marimapper"):
+        backend.set_led(0, True)
+
+
 def test_unreconstructed_leds_reported(tmp_path, monkeypatch, fake_pb, capsys):
     csv_file = tmp_path / "led_map_3d.csv"
     # index 0, 1, 4 present → indices 2 and 3 are unreconstructed (2 of 5)
