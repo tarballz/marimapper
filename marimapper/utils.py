@@ -2,12 +2,30 @@ import os
 import sys
 
 
+def _drain_stdin():
+    """Discard any keystrokes the user typed before we got to this prompt.
+    Async status output (e.g. SFM progress messages) used to repaint the
+    'Start scan?' prompt mid-scan; users would answer the apparent second
+    prompt, and that 'y' would sit in stdin and trigger an unwanted scan
+    when the next prompt iteration ran. Flushing input here makes the
+    prompt strictly synchronous: we only accept what's typed *after* it
+    appears."""
+    try:
+        import termios
+
+        termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+    except (ImportError, OSError, AttributeError):
+        pass  # not a TTY or non-POSIX; harmless to skip
+
+
 def get_user_confirmation(prompt):  # pragma: no coverage
 
     try:
+        _drain_stdin()
         uin = input(prompt)
 
         while uin.lower() not in ("y", "n"):
+            _drain_stdin()
             uin = input(prompt)
 
     except KeyboardInterrupt:

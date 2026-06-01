@@ -56,8 +56,24 @@ def add_normals(leds: list[LED3D]):
                 led.point.normal *= -1
 
 
+_last_printed_message: str = ""
+
+
 def print_without_hiding_scan_message(message: str):
-    print(f"\r{message}\nStart scan? [y/n]: ", end="")
+    # Async SFM status. We deliberately do NOT redraw the 'Start scan?'
+    # prompt: the redraw made the terminal look like it was asking
+    # again, so users typed 'y' twice and the buffered second 'y'
+    # triggered a ghost scan on the next iteration. Leading '\n' drops
+    # the message onto its own line below the active prompt, leaving
+    # the prompt visible and the still-active input() unaffected.
+    # Suppress consecutive duplicates: there are five callsites in this
+    # module that emit the recovery summary at different reconstruction
+    # stages, and they often produce identical text in succession.
+    global _last_printed_message
+    if message == _last_printed_message:
+        return
+    _last_printed_message = message
+    print(f"\n{message}", flush=True)
 
 
 def _log_recovery_summary(leds_3d, leds_2d, led_count, pruned_count=0):
