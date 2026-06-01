@@ -56,6 +56,14 @@ SFM ─────────────────────────�
 
 **VisualiseProcess** (`visualize_process.py`): Renders the 3D point cloud with open3d.
 
+### Wayland: viewer auto-routes through XWayland
+
+`visualize_process.py` uses the legacy GLFW-based `open3d.visualization.Visualizer`. Under open3d 0.19's bundled GLFW, **native Wayland** windowing is broken: GLFW picks the Wayland backend whenever `WAYLAND_DISPLAY` is set, fails to initialise GLEW, and `create_window()` returns `False` (no exception) — so no window opens.
+
+The fix is **not** a migration to `O3DVisualizer`. Empirically (COSMIC/Wayland, open3d 0.19), Filament's `O3DVisualizer` **also fails on native Wayland — it SIGSEGVs** (an uncatchable crash, strictly worse than the legacy `False`). Both viewers only work via **XWayland**. So `VisualiseProcess.run()` reroutes itself onto XWayland: when both `WAYLAND_DISPLAY` and `DISPLAY` are set, it pops `WAYLAND_DISPLAY` from the spawned child's `os.environ` (isolated to that process) before `create_window`, so GLFW falls back to X11/XWayland. The decision lives in the pure, unit-tested helper `should_force_xwayland(environ)` / `force_xwayland_if_useful(environ)`. `initialise_visualiser__` now also raises if `create_window()` returns `False`, so the soft-fail in `run()` engages cleanly instead of proceeding to `add_geometry` on a dead GL context (which can SIGSEGV uncatchably).
+
+Residual gap: **pure Wayland with no XWayland** (`DISPLAY` unset). The reroute is skipped (popping `WAYLAND_DISPLAY` would leave GLFW with no backend), the soft-fail prints `3D viewer disabled: ...`, and the scan continues without a live preview — rely on the recovery summary printed by `print_without_hiding_scan_message` to track progress. (A future open3d with working native-Wayland GLFW/Filament windowing would remove this gap, but upgrading is gated by the `pycolmap==3.11.1` lock; not worth it today.)
+
 ### Critical quirk: multiprocessing start method
 
 `scanner.py` calls `set_start_method("spawn")` at module load time and imports `SFM` first. This is **required** — open3d's `estimate_normals` crashes under Linux's default fork start method. See issue #46. The `conftest.py` also forces spawn for tests.

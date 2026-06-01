@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import open3d
 from multiprocessing import get_logger, Process, Event
@@ -9,6 +10,29 @@ logger = get_logger()
 
 # Temporary fix to stop the zero points issue when visualising
 open3d.utility.set_verbosity_level(open3d.utility.VerbosityLevel.Error)
+
+
+def should_force_xwayland(environ) -> bool:
+    """True iff the 3D viewer's GLFW window should be rerouted off native
+    Wayland onto XWayland.
+
+    open3d 0.19's bundled GLFW picks the Wayland backend whenever
+    WAYLAND_DISPLAY is set, then fails to initialise GLEW and returns no
+    window. Routing through XWayland (X11) works instead, but only if an X
+    server is actually reachable (DISPLAY set). Pure function of the env
+    contents so it is testable without a display. Empty-string values count
+    as unset, matching X/GLFW semantics.
+    """
+    return bool(environ.get("WAYLAND_DISPLAY")) and bool(environ.get("DISPLAY"))
+
+
+def force_xwayland_if_useful(environ) -> bool:
+    """If rerouting helps, pop WAYLAND_DISPLAY from ``environ`` in place so
+    GLFW falls back to X11/XWayland. Returns True if it rerouted."""
+    if should_force_xwayland(environ):
+        environ.pop("WAYLAND_DISPLAY", None)
+        return True
+    return False
 
 
 def get_all_views(leds: list[LED3D]) -> list[View]:
@@ -44,16 +68,44 @@ class VisualiseProcess(Process):
     def run(self):
         logger.debug("Renderer3D process starting")
         initialised = False
+        init_failed = False
 
         while not self._exit_event.is_set():
 
             if not self._input_queue.empty():
                 leds = self._input_queue.get()
+
+                if init_failed:
+                    continue
+
                 if len(leds) < 9:
                     continue
 
                 if not initialised:
-                    self.initialise_visualiser__()
+                    # open3d 0.19's GLFW can't open a window on native Wayland
+                    # (GLEW init fails). If an X server is reachable, reroute
+                    # this (spawned) process through XWayland by dropping
+                    # WAYLAND_DISPLAY before glfwInit runs in create_window.
+                    if force_xwayland_if_useful(os.environ):
+                        print(
+                            "Routing 3D viewer through XWayland "
+                            "(Wayland session detected).",
+                            flush=True,
+                        )
+                    try:
+                        self.initialise_visualiser__()
+                    except Exception as e:
+                        # Window creation can still fail (e.g. no X server at
+                        # all). Keep the process alive and drain the queue so
+                        # the rest of the scan continues — Scanner.check_for_crash()
+                        # treats a dead viewer as fatal.
+                        print(
+                            f"3D viewer disabled: {e}. "
+                            "Scan will continue without live preview.",
+                            flush=True,
+                        )
+                        init_failed = True
+                        continue
                     self.reload_geometry__(leds, True)
                     initialised = True
                 else:
@@ -69,14 +121,21 @@ class VisualiseProcess(Process):
     def initialise_visualiser__(self):
         logger.debug("Renderer3D process initialising visualiser")
 
-        self._vis = (
-            open3d.visualization.Visualizer()
-        )  # This needs to be updated to O3DVisualizer
-        self._vis.create_window(
+        self._vis = open3d.visualization.Visualizer()
+        ok = self._vis.create_window(
             window_name="MariMapper",
             width=640,
             height=640,
         )
+        if not ok:
+            # create_window returns False (no exception) when GLFW can't open a
+            # window — e.g. native Wayland, where GLEW init fails. Raise so the
+            # soft-fail in run() engages cleanly instead of proceeding to
+            # add_geometry on a dead GL context (which can SIGSEGV uncatchably).
+            raise RuntimeError(
+                "open3d create_window failed "
+                "(GLFW could not open a window on this display)"
+            )
 
         view_ctl = (
             self._vis.get_view_control()
